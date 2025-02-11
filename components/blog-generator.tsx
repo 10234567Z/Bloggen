@@ -1,24 +1,30 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MarkdownDisplay } from "./markdown-display"
 import { generateBlog } from "../actions/generate"
 import { publishToDevTo } from "../actions/publish"
 import { storage } from "../utils/storage"
-import type { GeneratedContent, BlogPost } from "../types/blog"
-import { Loader2, Eye, Edit2 } from "lucide-react"
+import type { BlogPost } from "../types/blog"
+import { Loader2, Eye, Edit2, Save, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 export function BlogGenerator() {
   const [prompt, setPrompt] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
-  const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null)
+  const [generatedContent, setGeneratedContent] = useState<BlogPost | null>(null)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [drafts, setDrafts] = useState<BlogPost[]>([])
+
+  useEffect(() => {
+    setDrafts(storage.getDrafts())
+  }, [])
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -29,10 +35,17 @@ export function BlogGenerator() {
     setIsGenerating(true)
     try {
       const content = await generateBlog(prompt)
-      setGeneratedContent(content)
+      const newPost: BlogPost = {
+        id: crypto.randomUUID(),
+        title: content.title,
+        content: content.content,
+        published: false,
+        createdAt: new Date().toISOString(),
+      }
+      setGeneratedContent(newPost)
       toast.success("Blog generated successfully!")
     } catch (error) {
-      toast.error("Failed to generate blog :" + error)
+      toast.error("Failed to generate blog")
     } finally {
       setIsGenerating(false)
     }
@@ -56,35 +69,60 @@ export function BlogGenerator() {
       })
 
       if (result.success) {
-        const newPost: BlogPost = {
-          id: crypto.randomUUID(),
-          title: generatedContent.title,
-          content: generatedContent.content,
+        const publishedPost: BlogPost = {
+          ...generatedContent,
           published: true,
           publishedUrl: result.url,
-          createdAt: new Date().toISOString(),
         }
 
         const posts = storage.getPosts()
-        storage.savePosts([...posts, newPost])
+        storage.savePosts([...posts, publishedPost])
+        storage.deleteDraft(generatedContent.id)
+        setDrafts(storage.getDrafts())
         toast.success("Published to dev.to successfully!")
       } else {
         throw new Error(result.error)
       }
     } catch (error) {
-      toast.error("Failed to publish dev.to" + error)
+      toast.error("Failed to publish to dev.to")
     } finally {
       setIsPublishing(false)
     }
   }
 
-  const handleContentChange = (field: keyof GeneratedContent, value: string) => {
+  const handleContentChange = (field: keyof BlogPost, value: string) => {
     if (generatedContent) {
-      setGeneratedContent({
+      const updatedContent = {
         ...generatedContent,
         [field]: value,
-      })
+      }
+      setGeneratedContent(updatedContent)
+      storage.saveDraft(updatedContent)
     }
+  }
+
+  const handleSaveDraft = () => {
+    if (generatedContent) {
+      storage.saveDraft(generatedContent)
+      setDrafts(storage.getDrafts())
+      toast.success("Draft saved successfully!")
+    }
+  }
+
+  const handleLoadDraft = (id: string) => {
+    const draft = drafts.find((d) => d.id === id)
+    if (draft) {
+      setGeneratedContent(draft)
+    }
+  }
+
+  const handleDeleteDraft = (id: string) => {
+    storage.deleteDraft(id)
+    setDrafts(storage.getDrafts())
+    if (generatedContent?.id === id) {
+      setGeneratedContent(null)
+    }
+    toast.success("Draft deleted successfully!")
   }
 
   return (
@@ -102,7 +140,19 @@ export function BlogGenerator() {
             disabled={isGenerating}
           />
         </CardContent>
-        <CardFooter className="flex justify-end gap-2">
+        <CardFooter className="flex justify-between gap-2">
+          <Select onValueChange={handleLoadDraft}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Load draft" />
+            </SelectTrigger>
+            <SelectContent>
+              {drafts.map((draft) => (
+                <SelectItem key={draft.id} value={draft.id}>
+                  {draft.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button onClick={handleGenerate} disabled={isGenerating || !prompt.trim()}>
             {isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isGenerating ? "Generating..." : "Generate Blog"}
@@ -125,10 +175,16 @@ export function BlogGenerator() {
                     Edit
                   </TabsTrigger>
                 </TabsList>
-                <Button onClick={handlePublish} disabled={isPublishing} size="sm">
-                  {isPublishing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isPublishing ? "Publishing..." : "Publish to dev.to"}
-                </Button>
+                <div className="space-x-2">
+                  <Button onClick={handleSaveDraft} size="sm" variant="outline">
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Draft
+                  </Button>
+                  <Button onClick={handlePublish} disabled={isPublishing} size="sm">
+                    {isPublishing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isPublishing ? "Publishing..." : "Publish to dev.to"}
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -163,6 +219,31 @@ export function BlogGenerator() {
             </TabsContent>
           </Tabs>
         </div>
+      )}
+
+      {drafts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Saved Drafts</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {drafts.map((draft) => (
+                <li key={draft.id} className="flex items-center justify-between">
+                  <span>{draft.title}</span>
+                  <div>
+                    <Button onClick={() => handleLoadDraft(draft.id)} size="sm" variant="outline" className="mr-2">
+                      Load
+                    </Button>
+                    <Button onClick={() => handleDeleteDraft(draft.id)} size="sm" variant="destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
     </div>
   )

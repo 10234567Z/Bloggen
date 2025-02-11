@@ -3,6 +3,7 @@ import type { BlogPost, DevToCredentials } from "../types/blog"
 const STORAGE_KEYS = {
   POSTS: "blog_posts",
   CREDENTIALS: "dev_to_credentials",
+  DRAFTS: "blog_drafts",
 }
 
 export const storage = {
@@ -24,6 +25,29 @@ export const storage = {
 
   saveCredentials: (credentials: DevToCredentials) => {
     localStorage.setItem(STORAGE_KEYS.CREDENTIALS, JSON.stringify(credentials))
+  },
+
+  getDrafts: (): BlogPost[] => {
+    if (typeof window === "undefined") return []
+    const drafts = localStorage.getItem(STORAGE_KEYS.DRAFTS)
+    return drafts ? JSON.parse(drafts) : []
+  },
+
+  saveDraft: (draft: BlogPost) => {
+    const drafts = storage.getDrafts()
+    const existingDraftIndex = drafts.findIndex((d) => d.id === draft.id)
+    if (existingDraftIndex !== -1) {
+      drafts[existingDraftIndex] = draft
+    } else {
+      drafts.push(draft)
+    }
+    localStorage.setItem(STORAGE_KEYS.DRAFTS, JSON.stringify(drafts))
+  },
+
+  deleteDraft: (id: string) => {
+    const drafts = storage.getDrafts()
+    const updatedDrafts = drafts.filter((d) => d.id !== id)
+    localStorage.setItem(STORAGE_KEYS.DRAFTS, JSON.stringify(updatedDrafts))
   },
 }
 
