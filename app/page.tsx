@@ -7,7 +7,7 @@ export default function Page() {
   return (
     <div className="container mx-auto py-8">
       <Toaster />
-      <h1 className="text-3xl font-bold mb-8">AI Blog Generator</h1>
+      <h1 className="text-3xl font-bold mb-8">Dev.to Blog Generator</h1>
 
       <Tabs defaultValue="generator" className="space-y-4">
         <TabsList>
