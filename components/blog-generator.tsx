@@ -32,7 +32,7 @@ export function BlogGenerator() {
       setGeneratedContent(content)
       toast.success("Blog generated successfully!")
     } catch (error) {
-      toast.error("Failed to generate blog")
+      toast.error("Failed to generate blog :" + error)
     } finally {
       setIsGenerating(false)
     }
@@ -72,7 +72,7 @@ export function BlogGenerator() {
         throw new Error(result.error)
       }
     } catch (error) {
-      toast.error("Failed to publish dev.to")
+      toast.error("Failed to publish dev.to" + error)
     } finally {
       setIsPublishing(false)
     }
